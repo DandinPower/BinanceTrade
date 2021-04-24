@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 from binance.client import Client
 api_key = ""
 api_secret = ""
-
-wallet = {"ETH": 0, "USDT": 16.87}
+client = Client(api_key, api_secret)
+wallet = {"ETH": 0, "USDT": 20}
 
 
 def buy(price, wallet):
@@ -22,16 +22,24 @@ def sell(price, wallet):
     return wallet
 
 
-client = Client(api_key, api_secret)
+def abs(number):
+    if number < 0:
+        return -number
+    else:
+        return number
+
+
+'''
+讀取K線
+'''
 OpenList = []
 CloseList = []
 HighList = []
 LowList = []
-RviList = []
-SignalList = []
 Time = []
-i = 0
-for kline in client.get_historical_klines("ETHUSDT", Client.KLINE_INTERVAL_5MINUTE,  "22 April, 2021", "23 April, 2021"):
+Num = 0
+
+for kline in client.get_historical_klines("ETHUSDT", Client.KLINE_INTERVAL_3MINUTE,  "1 day ago UTC"):
     Open = float(kline[1])
     OpenList.append(Open)
     High = float(kline[2])
@@ -40,9 +48,35 @@ for kline in client.get_historical_klines("ETHUSDT", Client.KLINE_INTERVAL_5MINU
     LowList.append(Low)
     Close = float(kline[4])
     CloseList.append(Close)
-    Time.append(i)
-    i += 1
-for j in range(i):
+    Time.append(Num)
+    Num += 1
+'''
+計算rsi
+'''
+rsi_k = 6
+RsiList = []
+for j in range(Num):
+    if (j >= rsi_k):
+        TempUp = 0
+        TempDown = 0
+        for i in range(rsi_k):
+            TempValue = CloseList[j-i] - OpenList[j-i]
+            if TempValue >= 0:
+                TempUp += TempValue
+            else:
+                TempDown += TempValue
+        TempUp = TempUp/rsi_k
+        TempDown = abs(TempDown/rsi_k)
+        TempRsi = TempUp/(TempDown+TempUp)
+        RsiList.append(TempRsi)
+    else:
+        RsiList.append(0)
+'''
+計算Rvi
+'''
+RviList = []
+SignalList = []
+for j in range(Num):
     if(j >= 3):
         Open = OpenList[j]
         Open_1 = OpenList[j-1]
@@ -68,7 +102,7 @@ for j in range(i):
         RviList.append(TempRVI)
     else:
         RviList.append(0)
-for j in range(i):
+for j in range(Num):
     if(j >= 3):
         Rvi = RviList[j]
         Rvi_1 = RviList[j-1]
@@ -78,13 +112,17 @@ for j in range(i):
         SignalList.append(TempSignal)
     else:
         SignalList.append(0)
+
+'''
+模擬購買
+'''
 BuyTimeList = []
 BuyList = []
 SellTimeList = []
 SellList = []
 buystate = True
 sellstate = False
-for j in range(1, i-1):
+for j in range(1, Num-1):
     rvi_next = RviList[j+1]
     rvi = RviList[j]
     rvi_1 = RviList[j-1]
@@ -92,39 +130,52 @@ for j in range(1, i-1):
     signal = SignalList[j]
     signal_1 = SignalList[j-1]
     price = OpenList[j]
-    if(rvi_1 < 0):
-        if(rvi > signal and buystate):
-            if(signal_1 > rvi_1):
-                wallet = buy(price, wallet)
-                buystate = False
-                sellstate = True
-                BuyTimeList.append(j)
-                BuyList.append(price)
-                print(wallet)
-    if(signal_1 > 0):
-        if(rvi < signal and sellstate):
-            if(signal_1 > rvi_1):
-                wallet = sell(price, wallet)
-                buystate = True
-                sellstate = False
-                SellTimeList.append(j)
-                SellList.append(price)
-                print(wallet)
-for j in range(i):
+    rsi = RsiList[j]
+    if(rsi > 0.5):
+        if(rvi_1 < -0.15):
+            if(rvi > signal and buystate):
+                if(signal_1 > rvi_1):
+                    wallet = buy(price, wallet)
+                    buystate = False
+                    sellstate = True
+                    BuyTimeList.append(j)
+                    BuyList.append(price)
+                    print(wallet)
+        if(signal_1 > 0.15):
+            if(rvi < signal and sellstate):
+                if(signal_1 > rvi_1):
+                    wallet = sell(price, wallet)
+                    buystate = True
+                    sellstate = False
+                    SellTimeList.append(j)
+                    SellList.append(price)
+                    print(wallet)
+for j in range(Num):
     for x in range(len(BuyTimeList)):
         if BuyTimeList[x] == j:
-            print("buy", j, BuyList[x])
+            print("buy", j, BuyList[x], RsiList[j])
     for x in range(len(SellTimeList)):
         if SellTimeList[x] == j:
-            print("sell", j, SellList[x])
+            print("sell", j, SellList[x], RsiList[j])
 
 if(sellstate):
     print(wallet["ETH"]*OpenList[-1])
+
+
+'''
+印出圖表
+'''
 
 plt.figure(figsize=(15, 10), dpi=100, linewidth=2)
 plt.plot(Time, SignalList, 's-', color='r')
 plt.plot(Time, RviList, 'o-', color='g')
 
+'''
+plt.figure(figsize=(15, 10), dpi=100, linewidth=2)
+plt.plot(Time, RsiList, 's-', color='r')'''
+
 plt.figure(figsize=(15, 10), dpi=100, linewidth=2)
 plt.plot(Time, OpenList, 's-', color='b')
+plt.plot(BuyTimeList, BuyList, '^', color='g')
+plt.plot(SellTimeList, SellList, '^', color='r')
 plt.show()
