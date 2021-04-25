@@ -1,28 +1,38 @@
+'''
+此版本為回測工具
+'''
 import matplotlib.pyplot as plt
 from binance.client import Client
 api_key = ""
 api_secret = ""
-client = Client(api_key, api_secret)
-wallet = {"ETH": 0, "USDT": 20}
+client = Client(api_key, api_secret)  # 用自己創立的Key,Secret登入binance帳戶
+Coin = "ETH"    # 設定貨幣為"..."
+Money = "USDT"  # 設定法幣為為"...""
+Coin_Money = Coin + Money
+Interval = Client.KLINE_INTERVAL_3MINUTE
+Time_Interval = "1 day ago UTC"
+wallet = {Coin: 0, Money: 20}  # 設定錢包
 
 
-def buy(price, wallet):
-    if(wallet["USDT"] != 0):
-        TempETH = wallet["USDT"]/price
-        wallet["USDT"] = 0
-        wallet["ETH"] = wallet["ETH"] + TempETH
+def buy(price, wallet):  # 此Function為模擬購買
+    if(wallet[Money] != 0):  # 當錢包有法幣時才能購買
+        wallet[Money] = wallet[Money] * 0.9995  # 將法幣扣除手續費
+        TempCoin = wallet[Money]/price  # TempCoin為買到的貨幣量
+        wallet[Money] = 0  # 清空錢包的法幣
+        wallet[Coin] = wallet[Coin] + TempCoin  # 將買到的TempCoin儲存起來
     return wallet
 
 
-def sell(price, wallet):
-    if(wallet["ETH"] != 0):
-        TempUSDT = wallet["ETH"] * price
-        wallet["ETH"] = 0
-        wallet["USDT"] = wallet["USDT"] + TempUSDT
+def sell(price, wallet):  # 此Function為模擬賣出
+    if(wallet[Coin] != 0):  # 當錢包有貨幣時才能賣出
+        wallet[Coin] = wallet[Coin] * 0.9995  # 將貨幣扣除手續費
+        TempMoney = wallet[Coin] * price  # 得到賣出的法幣量
+        wallet[Coin] = 0  # 清空貨幣
+        wallet[Money] = wallet[Money] + TempMoney  # 儲存法幣
     return wallet
 
 
-def abs(number):
+def abs(number):  # 取絕對值function
     if number < 0:
         return -number
     else:
@@ -30,7 +40,7 @@ def abs(number):
 
 
 '''
-讀取K線
+這部分為將K線存進各個陣列
 '''
 OpenList = []
 CloseList = []
@@ -39,7 +49,8 @@ LowList = []
 Time = []
 Num = 0
 
-for kline in client.get_historical_klines("ETHUSDT", Client.KLINE_INTERVAL_3MINUTE,  "1 day ago UTC"):
+# 讀取K線
+for kline in client.get_historical_klines(Coin_Money, Interval,  Time_Interval):
     Open = float(kline[1])
     OpenList.append(Open)
     High = float(kline[2])
@@ -51,7 +62,7 @@ for kline in client.get_historical_klines("ETHUSDT", Client.KLINE_INTERVAL_3MINU
     Time.append(Num)
     Num += 1
 '''
-計算rsi
+計算rsi,將計算結果存進RsiList
 '''
 rsi_k = 6
 RsiList = []
@@ -72,7 +83,7 @@ for j in range(Num):
     else:
         RsiList.append(0)
 '''
-計算Rvi
+計算Rvi,將結果存進RviList跟SignalList
 '''
 RviList = []
 SignalList = []
@@ -122,11 +133,11 @@ SellTimeList = []
 SellList = []
 buystate = True
 sellstate = False
-for j in range(1, Num-1):
-    rvi_next = RviList[j+1]
+for j in range(1, Num):
+
     rvi = RviList[j]
     rvi_1 = RviList[j-1]
-    signal_next = SignalList[j+1]
+
     signal = SignalList[j]
     signal_1 = SignalList[j-1]
     price = OpenList[j]
@@ -135,7 +146,7 @@ for j in range(1, Num-1):
         if(rvi_1 < -0.15):
             if(rvi > signal and buystate):
                 if(signal_1 > rvi_1):
-                    wallet = buy(price, wallet)
+                    wallet = buy(CloseList[j], wallet)
                     buystate = False
                     sellstate = True
                     BuyTimeList.append(j)
@@ -144,7 +155,7 @@ for j in range(1, Num-1):
         if(signal_1 > 0.15):
             if(rvi < signal and sellstate):
                 if(signal_1 > rvi_1):
-                    wallet = sell(price, wallet)
+                    wallet = sell(CloseList[j], wallet)
                     buystate = True
                     sellstate = False
                     SellTimeList.append(j)
@@ -159,7 +170,7 @@ for j in range(Num):
             print("sell", j, SellList[x], RsiList[j])
 
 if(sellstate):
-    print(wallet["ETH"]*OpenList[-1])
+    print(wallet[Coin]*OpenList[-1])
 
 
 '''
@@ -170,9 +181,6 @@ plt.figure(figsize=(15, 10), dpi=100, linewidth=2)
 plt.plot(Time, SignalList, 's-', color='r')
 plt.plot(Time, RviList, 'o-', color='g')
 
-'''
-plt.figure(figsize=(15, 10), dpi=100, linewidth=2)
-plt.plot(Time, RsiList, 's-', color='r')'''
 
 plt.figure(figsize=(15, 10), dpi=100, linewidth=2)
 plt.plot(Time, OpenList, 's-', color='b')
